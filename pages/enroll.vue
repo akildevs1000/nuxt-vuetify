@@ -2,12 +2,13 @@
   <div class="text-center mt-5">
     <v-container>
       <v-avatar size="150">
-        <img :src="profile_pictrue" alt="Avatar" />
+        {{ imageSrc }}
+        <img :src="imageSrc" alt="Avatar" />
       </v-avatar>
       <v-card-text>
         <div id="cameraContainer">
           <video
-            style="width: 100%; height: 250px; display: none"
+            style="width: 100%; height: 250px"
             id="camera"
             autoplay
             playsinline
@@ -28,20 +29,9 @@
           class="indigo"
           dark
           outlined
-          @click="capturePhoto(`in`)"
+          @click="enroll"
         >
-          Check In
-        </v-btn>
-        &nbsp;
-        <v-btn
-          :disabled="isButtonDisabled"
-          small
-          class="grey"
-          outlined
-          dark
-          @click="capturePhoto(`out`)"
-        >
-          Check Out
+          Enroll
         </v-btn>
       </v-card-text>
     </v-container>
@@ -72,7 +62,6 @@ export default {
     formattedDateTime: null,
     UserID: null,
     attendanceLogs: [],
-    profile_pictrue: "",
     uniqueDeviceId: null,
     device_id: null,
     isButtonDisabled: false,
@@ -111,86 +100,12 @@ export default {
     });
 
     this.UserID = this.$auth.user.employee.system_user_id;
-    this.profile_pictrue = this.$auth.user.employee.profile_picture;
-    this.device_id = `Mobile-${this.UserID}`;
   },
   methods: {
-    generateLog(type) {
-      this.isButtonDisabled = true;
-      setTimeout(() => {
-        this.isButtonDisabled = false;
-      }, 60000);
-      // return;
-      // Get the current date and time
-
-      const now = new Date();
-
-      // Format the date and time as "YYYY-MM-DD HH:mm"
-      this.formattedDateTime = `${now.getFullYear()}-${String(
-        now.getMonth() + 1
-      ).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(
-        now.getHours()
-      ).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-
-      let payload = {
-        UserID: this.UserID,
-        LogTime: this.formattedDateTime,
-        log_type: type,
-        DeviceID: this.device_id,
-        company_id: this.$auth.user.company_id,
-        gps_location: this.locationData.name,
-      };
-
-      //   return;
-
-      this.$axios
-        .post(`/generate_log`, payload)
-        .then(({ data }) => {
-          this.dialog = true;
-
-          if (!data.status) {
-            this.message = data.message;
-          }
-
-          this.message = "Your attendance has been marked.";
-
-          this.ifExist();
-        })
-        .catch(({ message }) => message);
-    },
-    registerDevice() {
-      let payload = {
-        device_id: this.device_id,
-        name: "Mobile",
-        short_name: "Mobile",
-        model_number: this.device_id,
-        location: this.locationData.name ?? "---",
-        company_id: this.$auth.user.company_id,
-        status_id: 1,
-        device_type: "auto",
-        ip: "0.0.0.0",
-        port: "0000",
-      };
-
-      this.$axios
-        .post(`/device`, payload)
-        .then(({ data }) => console.log(`This device registered successfully`))
-        .catch(({ message }) => console.log(message));
-    },
-    ifExist() {
-      this.$axios
-        .get(`/device-by-user/${this.device_id}`)
-        .then(({ data }) => {
-          if (!data) {
-            this.registerDevice();
-          } else {
-            console.log(`This device id already exist`);
-          }
-        })
-        .catch(({ message }) => console.log(message));
-    },
     async startCamera() {
       try {
+        this.isButtonDisabled = false;
+
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "user" },
         }); // Use front camera
@@ -200,9 +115,10 @@ export default {
         console.error("Error accessing camera:", error);
         this.errorMessageElement.style.display = "block";
         document.getElementById("cameraContainer").style.display = "none";
+        this.isButtonDisabled = true;
       }
     },
-    async capturePhoto(type) {
+    async enroll() {
       this.canvasElement.width = this.cameraElement.videoWidth;
       this.canvasElement.height = this.cameraElement.videoHeight;
       this.canvasElement
@@ -214,36 +130,30 @@ export default {
           this.canvasElement.width,
           this.canvasElement.height
         );
-      // const imageURL = this.canvasElement.toDataURL("image/png");
-      // const preview = document.createElement("img");
-      // document.body.appendChild(preview);
       this.imageSrc = this.canvasElement.toDataURL("image/png");
-      await this.sendLivenessPhoto(this.imageSrc, type);
-    },
-    async sendLivenessPhoto(src, type) {
-      try {
-        const config = {
-          headers: {
-            token: "4fa25eb27e254ffdbfb53181cb648090",
-            "Content-Type": "multipart/form-data", // Set content type to FormData
-          },
-        };
-        const formData = new FormData();
-        formData.append("photo", src);
-        const { data } = await this.$axios.post(
-          "https://api.luxand.cloud/photo/liveness",
-          formData,
-          config
-        );
-        if (data.result !== "real") {
-          this.dialog = true;
-          this.message = data.result;
-          return;
-        }
-        this.generateLog(type);
-      } catch (error) {
-        console.error(error);
-      }
+
+      var myHeaders = new Headers();
+      myHeaders.append("token", "4fa25eb27e254ffdbfb53181cb648090");
+
+      var formdata = new FormData();
+      formdata.append("name", "Francis");
+      formdata.append("photos", this.imageSrc);
+      formdata.append("store", "1");
+      formdata.append("collections", "Employees");
+
+      var requestOptions = {
+        method: "POST",
+        headers: myHeaders,
+        body: formdata,
+        redirect: "follow",
+      };
+
+      fetch("https://api.luxand.cloud/v2/person", requestOptions)
+        .then((response) => response.text())
+        .then((result) => {
+          console.log(result);
+        })
+        .catch((error) => console.log("error", error));
     },
   },
 };

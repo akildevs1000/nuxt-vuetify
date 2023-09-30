@@ -143,9 +143,9 @@
               </v-checkbox>
             </v-col>
             <v-col md="6" class="text-right pt-8">
-              <nuxt-link class="text-white" to="/reset-password"
+              <!-- <nuxt-link class="text-white" to="/reset-password"
                 >Forgot password?</nuxt-link
-              >
+              > -->
             </v-col>
           </v-row>
 
@@ -185,8 +185,8 @@ export default {
     valid: true,
     loading: false,
     snackbar: false,
-    email: "demo@gmail.com",
-    password: "",
+    email: "francisgill1002@gmail.com",
+    password: "1@Ab56ab56",
     show_password: false,
     msg: "",
     requiredRules: [(v) => !!v || "Required"],

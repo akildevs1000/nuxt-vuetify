@@ -1,6 +1,6 @@
 <template>
   <v-app dark>
-    <!-- <v-navigation-drawer
+    <v-navigation-drawer
       class="indigo"
       dark
       v-model="drawer"
@@ -25,12 +25,12 @@
           </v-list-item-content>
         </v-list-item>
       </v-list>
-    </v-navigation-drawer> -->
+    </v-navigation-drawer>
     <v-app-bar class="bg-color" :clipped-left="clipped" fixed app dark>
-      <!-- <v-app-bar-nav-icon @click.stop="drawer = !drawer" /> -->
-      <!-- <v-btn icon @click.stop="miniVariant = !miniVariant">
-        <v-icon>mdi-{{ `chevron-${miniVariant ? "right" : "left"}` }}</v-icon>
-      </v-btn> -->
+      <v-app-bar-nav-icon @click.stop="drawer = !drawer" />
+      <v-btn icon @click.stop="miniVariant = !miniVariant">
+        <!-- <v-icon>mdi-{{ `chevron-${miniVariant ? "right" : "left"}` }}</v-icon> -->
+      </v-btn>
       <!-- <v-btn icon @click.stop="clipped = !clipped">
         <v-icon>mdi-application</v-icon>
       </v-btn> -->
@@ -59,7 +59,7 @@
       </v-list>
     </v-navigation-drawer>
     <v-footer :absolute="!fixed" app>
-      {{ locationData && locationData.name || "Getting location..." }}
+      {{ (locationData && locationData.name) || "Getting location..." }}
       <Location @location="(e) => (locationData = e)" />
       <!-- <span>&copy; {{ new Date().getFullYear() }}</span> -->
     </v-footer>
@@ -81,13 +81,13 @@ export default {
       items: [
         {
           icon: "mdi-apps",
-          title: "Welcome",
+          title: "Home",
           to: "/",
         },
         {
           icon: "mdi-chart-bubble",
-          title: "Inspire",
-          to: "/inspire",
+          title: "Enroll",
+          to: "/enroll",
         },
       ],
       miniVariant: false,
@@ -98,8 +98,8 @@ export default {
   },
   computed: {
     locationData() {
-      return this.$store.state.locationData
-    }
+      return this.$store.state.locationData;
+    },
   },
   methods: {
     logout() {

@@ -5,21 +5,6 @@
         <img :src="profile_pictrue" alt="Avatar" />
       </v-avatar>
       <v-card-text>
-        <div id="cameraContainer">
-          <video
-            style="width: 100%; height: 250px; display: none"
-            id="camera"
-            autoplay
-            playsinline
-          ></video>
-          <br />
-
-          <canvas id="canvas" style="display: none"></canvas>
-        </div>
-        <p id="errorMessage" style="display: none; color: red">
-          Camera not found or access denied.
-        </p>
-
         <div>EID: {{ UserID }}</div>
         <!-- <div>Device Id: {{ uniqueDeviceId }}</div> -->
         <v-btn
@@ -28,7 +13,7 @@
           class="indigo"
           dark
           outlined
-          @click="capturePhoto(`in`)"
+          @click="generateLog(`in`)"
         >
           Check In
         </v-btn>
@@ -39,7 +24,7 @@
           class="grey"
           outlined
           dark
-          @click="capturePhoto(`out`)"
+          @click="generateLog(`out`)"
         >
           Check Out
         </v-btn>
@@ -78,12 +63,6 @@ export default {
     isButtonDisabled: false,
     dialog: false,
     message: "",
-    openCameraDialog: false,
-    response: "",
-    cameraElement: null,
-    canvasElement: null,
-    errorMessageElement: null,
-    imageSrc: "",
   }),
   computed: {
     locationData() {
@@ -98,12 +77,7 @@ export default {
       return navigator.userAgentData && navigator.userAgentData.brands;
     },
   },
-  mounted() {
-    this.cameraElement = document.getElementById("camera");
-    this.canvasElement = document.getElementById("canvas");
-    this.errorMessageElement = document.getElementById("errorMessage");
-    this.startCamera();
-  },
+
   created() {
     Fingerprint2.get({}, (components) => {
       const values = components.map(({ value }) => value);
@@ -188,62 +162,6 @@ export default {
           }
         })
         .catch(({ message }) => console.log(message));
-    },
-    async startCamera() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user" },
-        }); // Use front camera
-        this.cameraElement.srcObject = stream;
-        this.errorMessageElement.style.display = "none";
-      } catch (error) {
-        console.error("Error accessing camera:", error);
-        this.errorMessageElement.style.display = "block";
-        document.getElementById("cameraContainer").style.display = "none";
-      }
-    },
-    async capturePhoto(type) {
-      this.canvasElement.width = this.cameraElement.videoWidth;
-      this.canvasElement.height = this.cameraElement.videoHeight;
-      this.canvasElement
-        .getContext("2d")
-        .drawImage(
-          this.cameraElement,
-          0,
-          0,
-          this.canvasElement.width,
-          this.canvasElement.height
-        );
-      // const imageURL = this.canvasElement.toDataURL("image/png");
-      // const preview = document.createElement("img");
-      // document.body.appendChild(preview);
-      this.imageSrc = this.canvasElement.toDataURL("image/png");
-      await this.sendLivenessPhoto(this.imageSrc, type);
-    },
-    async sendLivenessPhoto(src, type) {
-      try {
-        const config = {
-          headers: {
-            token: "4fa25eb27e254ffdbfb53181cb648090",
-            "Content-Type": "multipart/form-data", // Set content type to FormData
-          },
-        };
-        const formData = new FormData();
-        formData.append("photo", src);
-        const { data } = await this.$axios.post(
-          "https://api.luxand.cloud/photo/liveness",
-          formData,
-          config
-        );
-        if (data.result !== "real") {
-          this.dialog = true;
-          this.message = data.result;
-          return;
-        }
-        this.generateLog(type);
-      } catch (error) {
-        console.error(error);
-      }
     },
   },
 };
