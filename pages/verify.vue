@@ -13,9 +13,7 @@
             </v-toolbar>
           </v-card>
         </v-dialog>
-        <!-- <v-text-field v-model="company_id" outlined dense></v-text-field>
-        <v-text-field v-model="name" outlined dense></v-text-field>
-        <v-text-field v-model="system_user_id" outlined dense></v-text-field> -->
+        <v-text-field v-model="uuid" outlined dense></v-text-field>
 
         <div
           id="cameraContainer"
@@ -43,10 +41,11 @@
 
 <script>
 export default {
+  auth: false,
+  layout: "guest",
   data() {
     return {
-      name: "",
-      system_user_id: "",
+      uuid: "",
       dialog: false,
       openCameraDialog: false,
       response: "",
@@ -54,6 +53,12 @@ export default {
       canvasElement: null,
       errorMessageElement: null,
       imageSrc: "",
+      config: {
+        headers: {
+          token: "4fa25eb27e254ffdbfb53181cb648090",
+          "Content-Type": "multipart/form-data", // Set content type to FormData
+        },
+      },
     };
   },
   mounted() {
@@ -63,8 +68,7 @@ export default {
     this.startCamera();
   },
   created() {
-    this.name = this.$auth.user.employee.first_name;
-    this.system_user_id = this.$auth.user.employee.system_user_id;
+    this.uuid = "669e267a-6082-11ee-86d3-0242ac120002";
   },
   methods: {
     async startCamera() {
@@ -94,26 +98,65 @@ export default {
           this.canvasElement.height
         );
 
-      this.canvasElement.toBlob(async (blob) => {
-        // Create a FormData object and append the image blob to it
-        const formData = new FormData();
-        formData.append("faceImage", await blob, "image.jpg");
-        formData.append("name", this.name);
-        formData.append("system_user_id", this.system_user_id);
-        formData.append("company_id", this.$auth.user.company_id);
+      this.checkLiveness(this.canvasElement);
+    },
 
-        this.$axios
-          .post("https://backend.ideahrms.com/api/store-temp-image", formData)
-          .then(({ data, status }) => {
-            this.dialog = true;
-            if (status == 200) {
-              this.response = "You have been enrolled successfully";
-            } else {
-              this.response = "You cannot enroll";
-            }
-          })
-          .catch((error) => console.error(error));
-      }, "image/jpeg"); // Convert to JPEG format
+    async checkLiveness(canvas) {
+      try {
+        const formData = new FormData();
+        const blob = await new Promise((resolve) =>
+          canvas.toBlob((blob) => resolve(blob), "image/jpeg")
+        );
+
+        formData.append("photo", canvas.toDataURL("image/png"));
+        const { data } = await this.$axios.post(
+          "https://api.luxand.cloud/photo/liveness",
+          formData,
+          this.config
+        );
+
+        if (data && data.result == "fake") {
+          this.dialog = true;
+          this.response = "Fake Image";
+          return;
+        }
+        this.verify(canvas);
+      } catch (error) {
+        this.dialog = true;
+        this.response = error.message;
+      }
+    },
+
+    async verify(canvas) {
+      try {
+        const blob = await new Promise((resolve) =>
+          canvas.toBlob((blob) => resolve(blob), "image/jpeg")
+        );
+
+        const formData = new FormData();
+        formData.append("faceImage", blob, "image.jpg");
+        formData.append("uuid", this.uuid);
+
+        const { data } = await this.$axios.post(
+          "https://backend.ideahrms.com/api/verify-temp-image",
+          formData
+        );
+
+        if (data && data.status === "failure") {
+          this.dialog = true;
+          this.response = data.message;
+          return;
+        }
+
+        // Temp
+        this.dialog = true;
+        this.response = data.message;
+
+        //
+      } catch (error) {
+        this.dialog = true;
+        this.response = error.message;
+      }
     },
   },
 };

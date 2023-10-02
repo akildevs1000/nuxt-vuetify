@@ -5,6 +5,21 @@
         <img :src="profile_pictrue" alt="Avatar" />
       </v-avatar>
       <v-card-text>
+        <div id="cameraContainer">
+          <video
+            style="width: 100%; height: 250px; display: none"
+            id="camera"
+            autoplay
+            playsinline
+          ></video>
+          <br />
+
+          <canvas id="canvas" style="display: none"></canvas>
+        </div>
+        <p id="errorMessage" style="display: none; color: red">
+          Camera not found or access denied.
+        </p>
+
         <div>EID: {{ UserID }}</div>
         <!-- <div>Device Id: {{ uniqueDeviceId }}</div> -->
         <v-btn
@@ -13,7 +28,7 @@
           class="indigo"
           dark
           outlined
-          @click="generateLog(`in`)"
+          @click="capturePhoto(`in`)"
         >
           Check In
         </v-btn>
@@ -24,7 +39,7 @@
           class="grey"
           outlined
           dark
-          @click="generateLog(`out`)"
+          @click="capturePhoto(`out`)"
         >
           Check Out
         </v-btn>
@@ -56,6 +71,7 @@ export default {
     ],
     formattedDateTime: null,
     UserID: null,
+    log_type: "",
     attendanceLogs: [],
     profile_pictrue: "",
     uniqueDeviceId: null,
@@ -63,6 +79,12 @@ export default {
     isButtonDisabled: false,
     dialog: false,
     message: "",
+    openCameraDialog: false,
+    response: "",
+    cameraElement: null,
+    canvasElement: null,
+    errorMessageElement: null,
+    imageSrc: "",
   }),
   computed: {
     locationData() {
@@ -77,7 +99,12 @@ export default {
       return navigator.userAgentData && navigator.userAgentData.brands;
     },
   },
-
+  mounted() {
+    this.cameraElement = document.getElementById("camera");
+    this.canvasElement = document.getElementById("canvas");
+    this.errorMessageElement = document.getElementById("errorMessage");
+    this.startCamera();
+  },
   created() {
     Fingerprint2.get({}, (components) => {
       const values = components.map(({ value }) => value);
@@ -162,6 +189,119 @@ export default {
           }
         })
         .catch(({ message }) => console.log(message));
+    },
+    async startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user" },
+        }); // Use front camera
+        this.cameraElement.srcObject = stream;
+        this.errorMessageElement.style.display = "none";
+      } catch (error) {
+        console.error("Error accessing camera:", error);
+        this.errorMessageElement.style.display = "block";
+        document.getElementById("cameraContainer").style.display = "none";
+      }
+    },
+    async capturePhoto(type) {
+      this.log_type = type;
+      this.canvasElement.width = this.cameraElement.videoWidth;
+      this.canvasElement.height = this.cameraElement.videoHeight;
+      this.canvasElement
+        .getContext("2d")
+        .drawImage(
+          this.cameraElement,
+          0,
+          0,
+          this.canvasElement.width,
+          this.canvasElement.height
+        );
+
+      this.checkLiveness(this.canvasElement);
+    },
+    async sendLivenessPhoto(src, type) {
+      try {
+        const config = {
+          headers: {
+            token: "4fa25eb27e254ffdbfb53181cb648090",
+            "Content-Type": "multipart/form-data", // Set content type to FormData
+          },
+        };
+        const formData = new FormData();
+        formData.append("photo", src);
+        const { data } = await this.$axios.post(
+          "https://api.luxand.cloud/photo/liveness",
+          formData,
+          config
+        );
+        if (data.result !== "real") {
+          // alert("Not real image");
+          this.dialog = true;
+          this.message = data.result;
+          return;
+        }
+        this.generateLog(type);
+      } catch (error) {
+        // alert("catch block");
+
+        this.dialog = true;
+        this.message = error;
+        console.error(error);
+      }
+    },
+
+    async checkLiveness(canvas) {
+      try {
+        const formData = new FormData();
+        const blob = await new Promise((resolve) =>
+          canvas.toBlob((blob) => resolve(blob), "image/jpeg")
+        );
+
+        formData.append("photo", canvas.toDataURL("image/png"));
+        const { data } = await this.$axios.post(
+          "https://api.luxand.cloud/photo/liveness",
+          formData,
+          this.config
+        );
+
+        if (data && data.result == "fake") {
+          this.dialog = true;
+          this.response = "Fake Image";
+          return;
+        }
+        this.verify(canvas);
+      } catch (error) {
+        this.dialog = true;
+        this.response = error.message;
+      }
+    },
+
+    async verify(canvas) {
+      try {
+        const blob = await new Promise((resolve) =>
+          canvas.toBlob((blob) => resolve(blob), "image/jpeg")
+        );
+
+        const formData = new FormData();
+        formData.append("faceImage", blob, "image.jpg");
+        formData.append("uuid", this.uuid);
+
+        const { data } = await this.$axios.post(
+          "https://backend.ideahrms.com/api/verify-temp-image",
+          formData
+        );
+
+        if (data && data.status === "failure") {
+          this.dialog = true;
+          this.response = data.message;
+          return;
+        }
+
+        this.generateLog(this.log_type);
+      } catch (error) {
+        this.dialog = true;
+        this.response = error.message;
+      }
     },
   },
 };

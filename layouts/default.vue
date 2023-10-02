@@ -84,11 +84,11 @@ export default {
           title: "Home",
           to: "/",
         },
-        {
-          icon: "mdi-chart-bubble",
-          title: "Enroll",
-          to: "/enroll",
-        },
+        // {
+        //   icon: "mdi-chart-bubble",
+        //   title: "Enroll",
+        //   to: "/enroll",
+        // },
       ],
       miniVariant: false,
       right: true,

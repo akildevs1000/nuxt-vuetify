@@ -5,21 +5,6 @@
         <img :src="profile_pictrue" alt="Avatar" />
       </v-avatar>
       <v-card-text>
-        <div id="cameraContainer">
-          <video
-            style="width: 100%; height: 250px; display: none"
-            id="camera"
-            autoplay
-            playsinline
-          ></video>
-          <br />
-
-          <canvas id="canvas" style="display: none"></canvas>
-        </div>
-        <p id="errorMessage" style="display: none; color: red">
-          Camera not found or access denied.
-        </p>
-
         <div>EID: {{ UserID }}</div>
         <!-- <div>Device Id: {{ uniqueDeviceId }}</div> -->
         <v-btn
@@ -28,7 +13,7 @@
           class="indigo"
           dark
           outlined
-          @click="capturePhoto(`in`)"
+          @click="generateLog(`in`)"
         >
           Check In
         </v-btn>
@@ -39,7 +24,7 @@
           class="grey"
           outlined
           dark
-          @click="capturePhoto(`out`)"
+          @click="generateLog(`out`)"
         >
           Check Out
         </v-btn>
@@ -72,18 +57,13 @@ export default {
     formattedDateTime: null,
     UserID: null,
     attendanceLogs: [],
-    profile_pictrue: "",
+    profile_pictrue: "no-profile-image.jpg",
     uniqueDeviceId: null,
     device_id: null,
     isButtonDisabled: false,
     dialog: false,
     message: "",
-    openCameraDialog: false,
     response: "",
-    cameraElement: null,
-    canvasElement: null,
-    errorMessageElement: null,
-    imageSrc: "",
   }),
   computed: {
     locationData() {
@@ -98,43 +78,27 @@ export default {
       return navigator.userAgentData && navigator.userAgentData.brands;
     },
   },
-  mounted() {
-    this.cameraElement = document.getElementById("camera");
-    this.canvasElement = document.getElementById("canvas");
-    this.errorMessageElement = document.getElementById("errorMessage");
-    this.startCamera();
-  },
-  created() {
-    Fingerprint2.get({}, (components) => {
-      const values = components.map(({ value }) => value);
-      this.uniqueDeviceId = Fingerprint2.x64hash128(values.join(""), 31);
-    });
-
+  mounted() {},
+  async created() {
+  
     this.UserID = this.$auth.user.employee.system_user_id;
     this.profile_pictrue = this.$auth.user.employee.profile_picture;
+
+    try {
+        await this.$axios.head(this.$auth.user.employee.profile_picture);
+      } catch (error) {
+        this.profile_pictrue = "no-profile-image.jpg";
+      }
+
     this.device_id = `Mobile-${this.UserID}`;
   },
   methods: {
     generateLog(type) {
-      this.isButtonDisabled = true;
-      setTimeout(() => {
-        this.isButtonDisabled = false;
-      }, 60000);
-      // return;
-      // Get the current date and time
-
-      const now = new Date();
-
-      // Format the date and time as "YYYY-MM-DD HH:mm"
-      this.formattedDateTime = `${now.getFullYear()}-${String(
-        now.getMonth() + 1
-      ).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(
-        now.getHours()
-      ).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      this.lockLogButtons();
 
       let payload = {
         UserID: this.UserID,
-        LogTime: this.formattedDateTime,
+        LogTime: this.getFormattedDateTime(),
         log_type: type,
         DeviceID: this.device_id,
         company_id: this.$auth.user.company_id,
@@ -158,6 +122,18 @@ export default {
         })
         .catch(({ message }) => message);
     },
+    ifExist() {
+      this.$axios
+        .get(`/device-by-user/${this.device_id}`)
+        .then(({ data }) => {
+          if (!data) {
+            this.registerDevice();
+          } else {
+            console.log(`This device id already exist`);
+          }
+        })
+        .catch(({ message }) => console.log(message));
+    },
     registerDevice() {
       let payload = {
         device_id: this.device_id,
@@ -177,87 +153,22 @@ export default {
         .then(({ data }) => console.log(`This device registered successfully`))
         .catch(({ message }) => console.log(message));
     },
-    ifExist() {
-      this.$axios
-        .get(`/device-by-user/${this.device_id}`)
-        .then(({ data }) => {
-          if (!data) {
-            this.registerDevice();
-          } else {
-            console.log(`This device id already exist`);
-          }
-        })
-        .catch(({ message }) => console.log(message));
+    lockLogButtons() {
+      this.isButtonDisabled = true;
+      setTimeout(() => {
+        this.isButtonDisabled = false;
+      }, 60000);
     },
-    async startCamera() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user" },
-        }); // Use front camera
-        this.cameraElement.srcObject = stream;
-        this.errorMessageElement.style.display = "none";
-      } catch (error) {
-        console.error("Error accessing camera:", error);
-        this.errorMessageElement.style.display = "block";
-        document.getElementById("cameraContainer").style.display = "none";
-      }
-    },
-    async capturePhoto(type) {
-      this.canvasElement.width = this.cameraElement.videoWidth;
-      this.canvasElement.height = this.cameraElement.videoHeight;
-      this.canvasElement
-        .getContext("2d")
-        .drawImage(
-          this.cameraElement,
-          0,
-          0,
-          this.canvasElement.width,
-          this.canvasElement.height
-        );
-      // const imageURL = this.canvasElement.toDataURL("image/png");
-      // const preview = document.createElement("img");
-      // document.body.appendChild(preview);
-      this.imageSrc = this.canvasElement.toDataURL("image/png");
-      await this.sendLivenessPhoto(this.imageSrc, type);
-    },
-    async sendLivenessPhoto(src, type) {
-      try {
-        const config = {
-          headers: {
-            token: "4fa25eb27e254ffdbfb53181cb648090",
-            "Content-Type": "multipart/form-data", // Set content type to FormData
-          },
-        };
-        const formData = new FormData();
-        formData.append("photo", src);
-        const { data } = await this.$axios.post(
-          "https://api.luxand.cloud/photo/liveness",
-          formData,
-          config
-        );
-        if (data.result !== "real") {
-          // alert("Not real image");
-          this.dialog = true;
-          this.message = data.result;
-          return;
-        }
-        this.generateLog(type);
-      } catch (error) {
-        // alert("catch block");
-
-        this.dialog = true;
-        this.message = error;
-        console.error(error);
-      }
+    getFormattedDateTime() {
+      const now = new Date();
+      // Format the date and time as "YYYY-MM-DD HH:mm"
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+        2,
+        "0"
+      )}-${String(now.getDate()).padStart(2, "0")} ${String(
+        now.getHours()
+      ).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
     },
   },
 };
 </script>
-
-<style scoped>
-@media only screen and (max-width: 600px) {
-  .v-data-table-header.v-data-table-header-mobile {
-    display: none;
-  }
-}
-</style>
