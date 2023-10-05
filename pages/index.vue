@@ -8,7 +8,7 @@
         <div>EID: {{ UserID }}</div>
         <!-- <div>Device Id: {{ uniqueDeviceId }}</div> -->
         <v-btn
-          :disabled="isButtonDisabled"
+          :disabled="disableCheckInButton"
           small
           class="indigo"
           dark
@@ -19,7 +19,7 @@
         </v-btn>
         &nbsp;
         <v-btn
-          :disabled="isButtonDisabled"
+          :disabled="disableCheckOutButton"
           small
           class="grey"
           outlined
@@ -29,15 +29,26 @@
           Check Out
         </v-btn>
       </v-card-text>
+
+      <!-- <v-card-text>
+        <v-btn small class="indigo" dark outlined @click="generateLog(`auto`)">
+          Auto (Testing Only)
+        </v-btn>
+      </v-card-text> -->
     </v-container>
     <v-row justify="center">
       <v-dialog v-model="dialog" persistent>
-        <v-card style="background-color: #6946dd" dark>
-          <v-card-actions>
+        <v-card>
+          <v-card-title>
             {{ message }}
             <v-spacer></v-spacer>
-            <v-icon @click="dialog = false"> mdi-close-circle-outline </v-icon>
-          </v-card-actions>
+            <v-icon @click="dialog = false" color="black">
+              mdi-close-circle-outline
+            </v-icon>
+          </v-card-title>
+          <v-card-text
+            >{{ (locationData && locationData.name) || "Getting location..." }}
+          </v-card-text>
         </v-card>
       </v-dialog>
     </v-row>
@@ -64,15 +75,19 @@ export default {
     dialog: false,
     message: "",
     response: "",
+    shift_type_id: "",
+    logsCount: null,
+
+    disableCheckInButton: false,
+    disableCheckOutButton: true,
+    // : true,
+    // : false,
   }),
   computed: {
     locationData() {
       return this.$store.state.locationData;
     },
 
-    navigator() {
-      return this.$store.state.navigator;
-    },
     brands() {
       let navigator = this.$store.state.navigator;
       return navigator.userAgentData && navigator.userAgentData.brands;
@@ -80,22 +95,24 @@ export default {
   },
   mounted() {},
   async created() {
-  
-    this.UserID = this.$auth.user.employee.system_user_id;
-    this.profile_pictrue = this.$auth.user.employee.profile_picture;
+    let employee = this.$auth.user.employee;
 
-    try {
-        await this.$axios.head(this.$auth.user.employee.profile_picture);
-      } catch (error) {
-        this.profile_pictrue = "no-profile-image.jpg";
-      }
+    this.UserID = employee.system_user_id;
+    this.profile_pictrue = employee.profile_picture;
+    this.shift_type_id = employee.schedule.shift_type_id;
+
+    this.getLogs();
+
+    // try {
+    //   await this.$axios.head(this.$auth.user.employee.profile_picture);
+    // } catch (error) {
+    //   this.profile_pictrue = "no-profile-image.jpg";
+    // }
 
     this.device_id = `Mobile-${this.UserID}`;
   },
   methods: {
     generateLog(type) {
-      this.lockLogButtons();
-
       let payload = {
         UserID: this.UserID,
         LogTime: this.getFormattedDateTime(),
@@ -116,9 +133,10 @@ export default {
             this.message = data.message;
           }
 
-          this.message = "Your attendance has been marked.";
+          this.message = "Success";
 
           this.ifExist();
+          this.getLogs();
         })
         .catch(({ message }) => message);
     },
@@ -153,10 +171,47 @@ export default {
         .then(({ data }) => console.log(`This device registered successfully`))
         .catch(({ message }) => console.log(message));
     },
-    lockLogButtons() {
-      this.isButtonDisabled = true;
+
+    getLogs() {
+      this.$axios
+        .get(
+          `/attendance_single_list?per_page=1&UserID=${
+            this.UserID
+          }&LogTime=${this.getFormattedDate()}&company_id=${
+            this.$auth.user.company_id
+          }`
+        )
+        .then(({ data }) => {
+          this.logsCount = data.total;
+          if (data && data.total % 2 != 0) {
+            this.disableCheckInButton = true;
+            this.disableCheckOutButton = false;
+            return;
+          }
+
+          this.disableCheckInButton = false;
+          this.disableCheckOutButton = true;
+        })
+        .catch(({ message }) => console.log(message));
+    },
+    lockLogButtons(type) {
+      setTimeout(() => (this.dialog = false), 10000);
+
+      if (type == "in") {
+        this.disableCheckInButton = true;
+
+        setTimeout(() => {
+          this.disableCheckOutButton = false;
+        }, 60000);
+
+        return;
+      }
+
+      this.disableCheckOutButton = true;
+
       setTimeout(() => {
-        this.isButtonDisabled = false;
+        this.disableCheckInButton = false;
+        this.$store.commit("disableCheckInButton", false);
       }, 60000);
     },
     getFormattedDateTime() {
@@ -168,6 +223,15 @@ export default {
       )}-${String(now.getDate()).padStart(2, "0")} ${String(
         now.getHours()
       ).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    },
+
+    getFormattedDate() {
+      const now = new Date();
+      // Format the date and time as "YYYY-MM-DD HH:mm"
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+        2,
+        "0"
+      )}-${String(now.getDate()).padStart(2, "0")}`;
     },
   },
 };
